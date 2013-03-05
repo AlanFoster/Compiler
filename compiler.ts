@@ -30,8 +30,6 @@ class TokenHashTable {
 	}
 }
 
-
-
 class Tokens {
 	private tokenTable : TokenMatch[] = [];
 	
@@ -54,27 +52,67 @@ class Tokens {
 	}
 }
 
+interface ICharacterStream {
+	peek(): string;
+	nextChar(): string;
+	nextWhile(predicate: (peek) => bool);
+	hasNext(): bool;
+	getLocation(): number;
+}
+
+class CharacterStream implements ICharacterStream {
+	private remainingInputString: string;
+	private location:number;
+	
+	// Just fakes a stream but taking the entire string for now
+	constructor(private inputString:string) {
+		this.remainingInputString = inputString;
+	}
+	
+	peek():string {
+		return this.remainingInputString[0] || "";
+	}
+	
+	nextChar():string {
+		var currentChar = this.remainingInputString[0]; 
+		this.remainingInputString = this.remainingInputString.substr(1);
+		this.location++;
+		return currentChar;
+	}
+	
+	nextWhile(predicate: (peek) => bool):string {
+		var bufferedChar = []
+		while(this.hasNext() && predicate(this.peek())){
+			bufferedChar.push(this.nextChar());
+		}
+		
+		var bufferedString = bufferedChar.join("");
+		return bufferedString;
+	}
+	
+	hasNext() {
+		return this.peek() !== "";
+	}
+	
+	getLocation() {
+		return this.location;
+	}
+}
+
+
+
 class Lexer {
 	tokens:Tokens = new Tokens();
 
-	lineNumber;
-	pointer;
-	head: string;
-	buffer: string[];
-	tail:string;
-	words = [];
-
 	hashTable;
+	
+	inputStream:ICharacterStream;
 	
 	constructor() {
 	}
 	
 	public lex(input : string) {
-		this.pointer = 0;
-		this.lineNumber = 0;
-		this.buffer = [];
-		this.head = undefined;
-		this.tail = input;
+		var inputStream = this.inputStream = new CharacterStream(input);
 		this.hashTable = {};
 
 		for(var i in (<any>TokenType)._map) {
@@ -82,99 +120,71 @@ class Lexer {
 		};
 
 		var tokenPairs = [];
-		while(this.tail != undefined) {
-			// Clear buffer
-			this.buffer = [];
+		while(inputStream.hasNext()) {
 			
 			var tokenPair : TokenPair = this.scan();
 			
 			if(tokenPair == null) {
-				alert("Failed to match lex :: " + this.head + " " + this.tail);
+				alert("Failed to lex :: " + inputStream.nextWhile((peek) => true));
 				return;
 			}
 			
 			tokenPairs.push(tokenPair);
 		}
 		
-		alert("Matching tokens are ::\n\n" + tokenPairs.join("\n\t"));
+		alert("Matching tokens are ::\n\n\t" + tokenPairs.join("\n\t"));
 
 		this.scan();
 	}
-
-	private peek() {
-		var nextChar = this.tail[0];
-		return nextChar;
-	}
-	
-	private consumeToBuffer() {
-		var nextChar : string = this.next();
-		this.buffer.push(nextChar);
-		
-		return nextChar;
-	}
-	
-	private next() {
-		this.head = this.tail[0];
-		this.tail = this.tail.substr(1);
-		this.pointer++;
-		
-		return this.head;
-	}
 	
 	private scan() : TokenPair {
+			var inputStream = this.inputStream;
 			// Skip whitespaces
 			// ignore all whitespaces
-			while(this.peek().match(/ /)) {
-				this.next();
+			inputStream.nextWhile((peek) => peek.match(/ /));
+
+			// Numbers
+			if(inputStream.peek().match(/\d/)) {
+				var entireNumber = inputStream.nextWhile((peek) => peek.match(/\d/));
+				return new TokenPair(((<any> TokenType)._map[TokenType.Number]), entireNumber);
 			}
-
+			
 			// Match reserved words => word = letter(letter|digit)*
-			if(this.peek().match(/[a-z]/i)) {
+			// And identifiers
+			if(inputStream.peek().match(/[a-z]/i)) {
 
-				// Consume the rest
-				while(this.peek().match(/[a-z]|\d/i)) {
-					this.consumeToBuffer();
-				}
-	
-				// Check if it exists in our reserved word list
-				var bufferedWord = this.buffer.join("").toLowerCase();
+				// Consume the entire word
+				var matchedWord = inputStream.nextWhile((peek) => peek.match(/[a-z]|\d/i));
 		
-				var matchedIndex = this.hashTable[bufferedWord];
+				// TODO Make hashmap which case ignores by default
+				var matchedIndex = this.hashTable[matchedWord.toLowerCase()];
 				// Test if we have a matching token operator/reserved word
 				// otherwise it is an idenitifer		
 				if(matchedIndex) {
-					return new TokenPair(((<any> TokenType)._map[matchedIndex]), bufferedWord);
+					return new TokenPair(((<any> TokenType)._map[matchedIndex]), matchedWord);
 				} else {
-					return new TokenPair(((<any> TokenType)._map[TokenType.Identifier]), bufferedWord);
+					return new TokenPair(((<any> TokenType)._map[TokenType.Identifier]), matchedWord);
 				}
 			}
 			
-			// Operators
-			switch(this.peek()) {
-				case ';': return new TokenPair(((<any> TokenType)._map[TokenType.Semicolon]), this.next());
+			// Match operators
+			switch(inputStream.peek()) {
+				case ';': return new TokenPair(((<any> TokenType)._map[TokenType.Semicolon]), inputStream.nextChar());
 				case '=': 
-					this.next();
-					if(this.peek() == '=') {
-						this.next();
+					inputStream.nextChar();
+					if(inputStream.peek() == '=') {
+						inputStream.nextChar();
 						return new TokenPair(((<any> TokenType)._map[TokenType.EqualsEquals]), "==");
 					} else {
 						return new TokenPair(((<any> TokenType)._map[TokenType.Equals]), "=");
 					}
 			}
 			
-			// Numbers
-			if(this.peek().match(/\d/)) {
-				while(this.peek().match(/\d/)) {
-					this.consumeToBuffer();
-				}
-				var entireNumber = this.buffer.toString();
-				return new TokenPair(((<any> TokenType)._map[TokenType.Number]), entireNumber);
-			}
-			
+
 			return undefined;
 	}
 }
 
 // Attempting to match the following string
-var testMatch = "var foobar = 10;";
+var testMatch = "var isEqual = 10 == 10;";
 new Lexer().lex(testMatch);
