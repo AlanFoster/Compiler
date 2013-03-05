@@ -1,4 +1,4 @@
-enum TokenType {
+enum TokenId {
 	Var,
 	EqualsEquals,
 	Equals,
@@ -7,9 +7,42 @@ enum TokenType {
 	Semicolon
 };
 
-class TokenPair {
-	constructor(public tokenType: TokenType, public lexeme: string) {
-		
+class TokenInfoTable {
+	tokenInfo = {};
+	constructor() {
+		this.tokenInfo = {};
+	}
+	
+	public addTokenInfo(tokenId:TokenId, value: string) {
+		this.tokenInfo[tokenId] = { tokenId:tokenId, value: value}; 
+	};
+	
+	public getKeyFromValue(value:any) {
+		var tokenInfo = this.tokenInfo;
+		for(var key in tokenInfo) {
+			if(tokenInfo[key] && tokenInfo[key].value == value) {
+				return tokenInfo[key].tokenId;
+			}
+		}
+		return undefined;
+	}
+	
+};
+
+var tokenInfoTable = new TokenInfoTable();
+tokenInfoTable.addTokenInfo(TokenId.Var, "var");
+tokenInfoTable.addTokenInfo(TokenId.EqualsEquals, "==");
+tokenInfoTable.addTokenInfo(TokenId.Equals, "=");
+tokenInfoTable.addTokenInfo(TokenId.Identifier, "identifier");
+tokenInfoTable.addTokenInfo(TokenId.Number, "number");
+tokenInfoTable.addTokenInfo(TokenId.Semicolon, ";");
+
+// The static values - Where 'static' in this case means unchanging.
+// IE reserved words, operators, but not something like an identifier
+// ...
+
+class Token {
+	constructor(public tokenType: TokenId, public lexeme: string) {
 	}
 	
 	public toString() {
@@ -17,38 +50,15 @@ class TokenPair {
 	}
 }
 
-class TokenMatch {
-	constructor(public tokenType: TokenType, public text:string) {
-		
+class NumberToken extends Token {
+	constructor(public lexeme: string) {
+		super(TokenId.Number, lexeme)
 	}
 }
 
-class TokenHashTable {
-		
-	constructor(key : string, value : TokenType) {
-		
-	}
-}
-
-class Tokens {
-	private tokenTable : TokenMatch[] = [];
-	
-	constructor() {
-		this.addTokenMatch(TokenType.Var, "var");
-		
-		this.addTokenMatch(TokenType.EqualsEquals, "==");
-		this.addTokenMatch(TokenType.Equals, "=");
-		this.addTokenMatch(TokenType.Identifier, "identifier");
-		this.addTokenMatch(TokenType.Number, "number");
-		this.addTokenMatch(TokenType.Semicolon, ";");
-	}
-	
-	private addTokenMatch(tokenType : TokenType, text:string) {
-		this.tokenTable[tokenType] = new TokenMatch(tokenType, text);
-	}
-	
-	public getTokenTable() {
-		return this.tokenTable;
+class IdentifierToken extends Token {
+	constructor(public lexeme: string) {
+		super(TokenId.Identifier, lexeme)
 	}
 }
 
@@ -99,11 +109,7 @@ class CharacterStream implements ICharacterStream {
 	}
 }
 
-
-
 class Lexer {
-	tokens:Tokens = new Tokens();
-
 	hashTable;
 	
 	inputStream:ICharacterStream;
@@ -115,29 +121,29 @@ class Lexer {
 		var inputStream = this.inputStream = new CharacterStream(input);
 		this.hashTable = {};
 
-		for(var i in (<any>TokenType)._map) {
+		/*for(var i in (<any>TokenType)._map) {
 			this.hashTable[(<any> TokenType)._map[i].toLowerCase()] = i;
-		};
+		};*/
 
-		var tokenPairs = [];
+		var tokens = [];
 		while(inputStream.hasNext()) {
 			
-			var tokenPair : TokenPair = this.scan();
+			var token : Token = this.scan();
 			
-			if(tokenPair == null) {
-				alert("Failed to lex :: " + inputStream.nextWhile((peek) => true));
+			if(token == null) {
+				alert("Failed to lex :: " + inputStream.nextWhile((peek) => true) + "\nSuccesful tokens were :: " + tokens.join("\n\t"));
 				return;
 			}
 			
-			tokenPairs.push(tokenPair);
+			tokens.push(token);
 		}
 		
-		alert("Matching tokens are ::\n\n\t" + tokenPairs.join("\n\t"));
+		alert("Matching tokens are ::\n\n\t" + tokens.join("\n\t"));
 
 		this.scan();
 	}
 	
-	private scan() : TokenPair {
+	private scan() : Token {
 			var inputStream = this.inputStream;
 			// Skip whitespaces
 			// ignore all whitespaces
@@ -146,7 +152,7 @@ class Lexer {
 			// Numbers
 			if(inputStream.peek().match(/\d/)) {
 				var entireNumber = inputStream.nextWhile((peek) => peek.match(/\d/));
-				return new TokenPair(((<any> TokenType)._map[TokenType.Number]), entireNumber);
+				return new NumberToken(entireNumber);
 			}
 			
 			// Match reserved words => word = letter(letter|digit)*
@@ -157,18 +163,18 @@ class Lexer {
 				var matchedWord = inputStream.nextWhile((peek) => peek.match(/[a-z]|\d/i));
 		
 				// TODO Make hashmap which case ignores by default
-				var matchedIndex = this.hashTable[matchedWord.toLowerCase()];
+				var matchedKey = tokenInfoTable.getKeyFromValue(matchedWord);
 				// Test if we have a matching token operator/reserved word
 				// otherwise it is an idenitifer		
-				if(matchedIndex) {
-					return new TokenPair(((<any> TokenType)._map[matchedIndex]), matchedWord);
+				if(matchedKey) {
+					return new Token(matchedKey, matchedWord);
 				} else {
-					return new TokenPair(((<any> TokenType)._map[TokenType.Identifier]), matchedWord);
+					return new IdentifierToken(matchedWord);
 				}
 			}
 			
 			// Match operators
-			switch(inputStream.peek()) {
+			/*switch(inputStream.peek()) {
 				case ';': return new TokenPair(((<any> TokenType)._map[TokenType.Semicolon]), inputStream.nextChar());
 				case '=': 
 					inputStream.nextChar();
@@ -178,8 +184,7 @@ class Lexer {
 					} else {
 						return new TokenPair(((<any> TokenType)._map[TokenType.Equals]), "=");
 					}
-			}
-			
+			}*/
 
 			return undefined;
 	}
