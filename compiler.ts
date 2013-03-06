@@ -8,7 +8,8 @@ enum TokenId {
 	GreaterThan,
 	GreaterThanEquals,
 	LessThan,
-	LessThanEquals
+	LessThanEquals,
+	Comment
 };
 
 // Denote the 'Type' of the lexeme at a high level
@@ -29,7 +30,7 @@ class Token {
 	}
 	
 	public toString() {
-		var tokenString = (<any>TokenId)._map[this.tokenId]);
+		var tokenString = (<any>TokenId)._map[this.tokenId];
 		return "[Token \"" + tokenString + "\" (" + this.tokenId + "), lexeme \"" + this.lexeme + "\"]";
 	}
 }
@@ -96,9 +97,12 @@ tokenInfoTable.addTokenInfo(TokenId.GreaterThan, LexemeType.Constant, ">");
 tokenInfoTable.addTokenInfo(TokenId.GreaterThanEquals, LexemeType.Constant, ">=");
 tokenInfoTable.addTokenInfo(TokenId.LessThan, LexemeType.Constant, "<");
 tokenInfoTable.addTokenInfo(TokenId.LessThanEquals, LexemeType.Constant, "<=");
+tokenInfoTable.addTokenInfo(TokenId.Comment, LexemeType.Dynamic, "comment");
 
 interface ICharacterStream {
 	peek(): string;
+	// Peek at second char in stream, just testing for now.
+	peekPeek();
 	nextChar(): string;
 	// Attempts to match the peek value to the given string,
 	// if true, consume the next character and return true
@@ -120,6 +124,11 @@ class CharacterStream implements ICharacterStream {
 	
 	peek():string {
 		return this.remainingInputString[0] || "";
+	}
+	
+	// Peek at second char in stream, just testing for now.
+	peekPeek():string {
+		return this.remainingInputString[1] || "";	
 	}
 	
 	match(match:string):bool {
@@ -168,25 +177,19 @@ class Lexer {
 		var inputStream = this.inputStream = new CharacterStream(input);
 		this.hashTable = {};
 
-		/*for(var i in (<any>TokenType)._map) {
-			this.hashTable[(<any> TokenType)._map[i].toLowerCase()] = i;
-		};*/
-
 		var tokens = [];
 		while(inputStream.hasNext()) {
 			var token : Token = this.scan();
 			
 			if(token == null) {
 				alert("Failed to lex :: " + inputStream.nextWhile((peek) => true) + "\nSuccesful tokens were :: " + tokens.join("\n\t"));
-				return;
+				return undefined;
 			}
 			
 			tokens.push(token);
 		}
 		
-		alert("Matching tokens are ::\n\n\t" + tokens.join("\n\t"));
-
-		this.scan();
+		return tokens;
 	}
 	
 	
@@ -197,7 +200,8 @@ class Lexer {
 			inputStream.nextWhile((peek) => peek.match(/ /));
 
 			// Return the first matching token for the input
-			return this.scanNumber(inputStream)
+			return this.scanComment(inputStream)
+				|| this.scanNumber(inputStream)
 				|| this.scanReservedWords(inputStream)
 				|| this.scanOperators(inputStream);
 	}
@@ -228,6 +232,33 @@ class Lexer {
 				return tokenInfoTable.getDetail(TokenId.Identifier).tokenCreator(matchedWord);
 			}
 		}
+	}
+		
+			
+	private scanComment(inputStream:ICharacterStream) {
+		// Match reserved words => word = letter(letter|digit)*
+		// And identifiers
+		if(inputStream.peek() == "/" && inputStream.peekPeek() == "*") {
+			var commentCharArray = [];
+			commentCharArray.push(inputStream.nextChar());
+			commentCharArray.push(inputStream.nextChar());
+			
+			do {
+				commentCharArray.push(inputStream.nextChar());
+				if(inputStream.peek() == ""){
+					alert("Invalid comment structure");
+					return undefined;
+				}
+			} while(!(inputStream.peek() === "*" && inputStream.peekPeek() === "/"));
+			commentCharArray.push(inputStream.nextChar());
+			commentCharArray.push(inputStream.nextChar());
+			
+			var comment = commentCharArray.join("");
+			
+			return tokenInfoTable.getDetail(TokenId.Comment).tokenCreator(comment);
+		}
+		
+
 	}
 	
 	private scanOperators(inputStream:ICharacterStream) {
@@ -261,15 +292,20 @@ class Lexer {
 }
 
 // Attempting to match the following string
-var testMatch =
-	"var foo = 10;" +
-	"var bar = 20;" +
-	"var isEqual = foo == bar;" +
+var testMatch = ""
+	+ "/******************************************"
+	+ "* Comment Test"
+	+ "*******************************************/"
+	+ "var foo = 10;"
+	+ "var bar = 20;" 
+	+ "var isEqual = foo == bar;" 
 	// Greater
-	"var isGreaterThan = foo > bar;" +
-	"var isGreaterThanOrEqual = foo >= bar;" +
+	+ "var isGreaterThan = foo > bar;" 
+	+ "var isGreaterThanOrEqual = foo >= bar;" 
 	// Less
-	"var isLessThan = foo < bar;" +
-	"var isLessThanOrGreater = foo <= bar;";
+	+ "var isLessThan = foo < bar;" 
+	+ "var isLessThanOrGreater = foo <= bar;";
 	
-new Lexer().lex(testMatch);
+var tokens:Token[] = new Lexer().lex(testMatch);
+
+alert("Matching tokens for parsing are ::\n\n\t" + tokens.join("\n\t"));
