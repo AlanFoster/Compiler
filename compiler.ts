@@ -4,7 +4,11 @@ enum TokenId {
 	Equals,
 	Identifier,
 	Number,
-	Semicolon
+	Semicolon,
+	GreaterThan,
+	GreaterThanEquals,
+	LessThan,
+	LessThanEquals
 };
 
 // Denote the 'Type' of the lexeme at a high level
@@ -25,7 +29,8 @@ class Token {
 	}
 	
 	public toString() {
-		return "[tokenType \"" + this.tokenId + "\", lexeme \"" + this.lexeme + "\"]";
+		var tokenString = (<any>TokenId)._map[this.tokenId]);
+		return "[Token \"" + tokenString + "\" (" + this.tokenId + "), lexeme \"" + this.lexeme + "\"]";
 	}
 }
 
@@ -64,7 +69,7 @@ class TokenInfoTable {
 		this.tokenInfo[tokenId] = new TokenDetail(tokenId, lexemeType, value, tokenCreator);
 	};
 	
-	public matchConstant(value:any) {
+	public matchConstant(value) {
 		var tokenInfo = this.tokenInfo;
 		for(var key in tokenInfo) {
 			if(tokenInfo[key] && tokenInfo[key].value == value) {
@@ -87,9 +92,10 @@ tokenInfoTable.addTokenInfo(TokenId.Equals, LexemeType.Constant, "=");
 tokenInfoTable.addTokenInfo(TokenId.Identifier, LexemeType.Dynamic, "identifier");
 tokenInfoTable.addTokenInfo(TokenId.Number, LexemeType.Dynamic, "number");
 tokenInfoTable.addTokenInfo(TokenId.Semicolon, LexemeType.Constant, ";");
-
-
-
+tokenInfoTable.addTokenInfo(TokenId.GreaterThan, LexemeType.Constant, ">");
+tokenInfoTable.addTokenInfo(TokenId.GreaterThanEquals, LexemeType.Constant, ">=");
+tokenInfoTable.addTokenInfo(TokenId.LessThan, LexemeType.Constant, "<");
+tokenInfoTable.addTokenInfo(TokenId.LessThanEquals, LexemeType.Constant, "<=");
 
 interface ICharacterStream {
 	peek(): string;
@@ -124,7 +130,6 @@ class CharacterStream implements ICharacterStream {
 		return isMatch;
 	}
 	
-	
 	nextChar():string {
 		var currentChar = this.remainingInputString[0]; 
 		this.remainingInputString = this.remainingInputString.substr(1);
@@ -151,7 +156,6 @@ class CharacterStream implements ICharacterStream {
 	}
 }
 
-
 class Lexer {
 	hashTable;
 	
@@ -170,7 +174,6 @@ class Lexer {
 
 		var tokens = [];
 		while(inputStream.hasNext()) {
-			
 			var token : Token = this.scan();
 			
 			if(token == null) {
@@ -193,12 +196,13 @@ class Lexer {
 			// ignore all whitespaces
 			inputStream.nextWhile((peek) => peek.match(/ /));
 
+			// Return the first matching token for the input
 			return this.scanNumber(inputStream)
 				|| this.scanReservedWords(inputStream)
 				|| this.scanOperators(inputStream);
 	}
 	
-		private scanNumber(inputStream:ICharacterStream) {
+	private scanNumber(inputStream:ICharacterStream) {
 		// Numbers
 		if(inputStream.peek().match(/\d/)) {
 			var entireNumber = inputStream.nextWhile((peek) => peek.match(/\d/));
@@ -210,10 +214,12 @@ class Lexer {
 		// Match reserved words => word = letter(letter|digit)*
 		// And identifiers
 		if(inputStream.peek().match(/[a-z]/i)) {
+
 			// Consume the entire word
 			var matchedWord = inputStream.nextWhile((peek) => peek.match(/[a-z]|\d/i));
-
+			// Attempt to match this against a constant, such as a reserved word
 			var constantToken:TokenDetail = tokenInfoTable.matchConstant(matchedWord);
+			
 			// Test if we have a matching token operator/reserved word
 			// otherwise it is an idenitifer		
 			if(constantToken) {
@@ -227,22 +233,43 @@ class Lexer {
 	private scanOperators(inputStream:ICharacterStream) {
 		// Match operators			
 		switch(inputStream.peek()) {
-			case ';': return new Token(TokenId.Semicolon, inputStream.nextChar());
-			case '=': 
+			case ';': return tokenInfoTable.getDetail(TokenId.Semicolon).tokenCreator(inputStream.nextChar());
+			case '=':
 				inputStream.nextChar();
 				if(inputStream.match('=')) {
 					return tokenInfoTable.getDetail(TokenId.EqualsEquals).tokenCreator("==");
 				} else {
 					return tokenInfoTable.getDetail(TokenId.Equals).tokenCreator("=");
 				}
+			case '>':
+				inputStream.nextChar();
+				if(inputStream.match('=')) {
+					return tokenInfoTable.getDetail(TokenId.GreaterThanEquals).tokenCreator(">=");
+				} else {
+					return tokenInfoTable.getDetail(TokenId.GreaterThan).tokenCreator(">");
+				}
+			case '<':
+				inputStream.nextChar();
+				if(inputStream.match('=')) {
+					return tokenInfoTable.getDetail(TokenId.LessThanEquals).tokenCreator("<=");
+				} else {
+					return tokenInfoTable.getDetail(TokenId.LessThan).tokenCreator("<");
+				}		
 		}		
+		
 	}
-	
-	
-	
-	
 }
 
 // Attempting to match the following string
-var testMatch = "var isEqual = 10 == 10;";
+var testMatch =
+	"var foo = 10;" +
+	"var bar = 20;" +
+	"var isEqual = foo == bar;" +
+	// Greater
+	"var isGreaterThan = foo > bar;" +
+	"var isGreaterThanOrEqual = foo >= bar;" +
+	// Less
+	"var isLessThan = foo < bar;" +
+	"var isLessThanOrGreater = foo <= bar;";
+	
 new Lexer().lex(testMatch);
