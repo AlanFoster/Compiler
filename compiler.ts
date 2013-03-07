@@ -1,3 +1,6 @@
+/**
+ * Tokens
+ */ 
 module Compiler {
 	export enum TokenId {
 		Var,
@@ -100,9 +103,12 @@ module Compiler {
 	tokenInfoTable.addTokenInfo(TokenId.LessThan, LexemeType.Constant, "<");
 	tokenInfoTable.addTokenInfo(TokenId.LessThanEquals, LexemeType.Constant, "<=");
 	tokenInfoTable.addTokenInfo(TokenId.Comment, LexemeType.Dynamic, "comment");
-
 }
 
+/**
+ * Stream related - For consuming an input stream of characters
+ * This may be extended to be used for consuming a stream of tokens too
+ */
 module Stream {
 		export interface ICharacterStream {
 			peek(): string;
@@ -172,138 +178,139 @@ module Stream {
 		
 }
 
+/**
+ * The lexer which consumes the input stream of the program
+ * And returns the list of tokens that it has matched
+ */ 
 module Compiler {
-	export module Lexer  { 
-
-		export class Scanner {
-			hashTable;
-			
-			inputStream:Stream.ICharacterStream;
-			
-			constructor() {
-			}
-			
-			public lex(input : string) {
-				var inputStream = this.inputStream = new Stream.CharacterStream(input);
-				this.hashTable = {};
+	export class Lexer {
+		hashTable;
 		
-				var tokens = [];
-				while(inputStream.hasNext()) {
-					var token : Token = this.scan();
-					
-					if(token == null) {
-						alert("Failed to lex :: " + inputStream.nextWhile((peek) => true) + "\nSuccesful tokens were :: " + tokens.join("\n\t"));
-						return undefined;
-					}
-					
-					tokens.push(token);
+		inputStream:Stream.ICharacterStream;
+		
+		constructor() {
+		}
+		
+		public lex(input : string) {
+			var inputStream = this.inputStream = new Stream.CharacterStream(input);
+			this.hashTable = {};
+	
+			var tokens = [];
+			while(inputStream.hasNext()) {
+				var token : Token = this.scan();
+				
+				if(token == null) {
+					alert("Failed to lex :: " + inputStream.nextWhile((peek) => true) + "\nSuccesful tokens were :: " + tokens.join("\n\t"));
+					return undefined;
 				}
 				
-				return tokens;
+				tokens.push(token);
 			}
 			
-			
-			private scan() : Token {
-					var inputStream = this.inputStream;
-					// Skip whitespaces
-					// ignore all whitespaces
-					inputStream.nextWhile((peek) => peek.match(/ /));
+			return tokens;
+		}
 		
-					// Return the first matching token for the input
-					return this.scanComment(inputStream)
-						|| this.scanNumber(inputStream)
-						|| this.scanReservedWords(inputStream)
-						|| this.scanOperators(inputStream);
-			}
-			
-			private scanNumber(inputStream:Stream.ICharacterStream) {
-				// Numbers
-				if(inputStream.peek().match(/\d/)) {
-					var entireNumber = inputStream.nextWhile((peek) => peek.match(/\d/));
-					return tokenInfoTable.getDetail(TokenId.Number).tokenCreator(entireNumber);
-				}
-			}
-			
-			private scanReservedWords(inputStream:Stream.ICharacterStream) {
-				// Match reserved words => word = letter(letter|digit)*
-				// And identifiers
-				if(inputStream.peek().match(/[a-z]/i)) {
+		private scan() : Token {
+				var inputStream = this.inputStream;
+				// Skip whitespaces
+				// ignore all whitespaces
+				inputStream.nextWhile((peek) => peek.match(/ /));
+	
+				// Return the first matching token for the input
+				return this.scanComment(inputStream)
+					|| this.scanNumber(inputStream)
+					|| this.scanReservedWords(inputStream)
+					|| this.scanOperators(inputStream);
+		}
 		
-					// Consume the entire word
-					var matchedWord = inputStream.nextWhile((peek) => peek.match(/[a-z]|\d/i));
-					// Attempt to match this against a constant, such as a reserved word
-					var constantToken:TokenDetail = tokenInfoTable.matchConstant(matchedWord);
-					
-					// Test if we have a matching token operator/reserved word
-					// otherwise it is an idenitifer		
-					if(constantToken) {
-						return constantToken.tokenCreator(matchedWord); 
-					} else {
-						return tokenInfoTable.getDetail(TokenId.Identifier).tokenCreator(matchedWord);
-					}
-				}
-			}
-				
-					
-			private scanComment(inputStream:Stream.ICharacterStream) {
-				// Match reserved words => word = letter(letter|digit)*
-				// And identifiers
-				if(inputStream.peek() == "/" && inputStream.peekPeek() == "*") {
-					var commentCharArray = [];
-					commentCharArray.push(inputStream.nextChar());
-					commentCharArray.push(inputStream.nextChar());
-					
-					do {
-						commentCharArray.push(inputStream.nextChar());
-						if(inputStream.peek() == ""){
-							alert("Invalid comment structure");
-							return undefined;
-						}
-					} while(!(inputStream.peek() === "*" && inputStream.peekPeek() === "/"));
-					commentCharArray.push(inputStream.nextChar());
-					commentCharArray.push(inputStream.nextChar());
-					
-					var comment = commentCharArray.join("");
-					
-					return tokenInfoTable.getDetail(TokenId.Comment).tokenCreator(comment);
-				}
-			}
-			
-			private scanOperators(inputStream:Stream.ICharacterStream) {
-				// Match operators			
-				switch(inputStream.peek()) {
-					case ';': return tokenInfoTable.getDetail(TokenId.Semicolon).tokenCreator(inputStream.nextChar());
-					case '=':
-						inputStream.nextChar();
-						if(inputStream.match('=')) {
-							return tokenInfoTable.getDetail(TokenId.EqualsEquals).tokenCreator("==");
-						} else {
-							return tokenInfoTable.getDetail(TokenId.Equals).tokenCreator("=");
-						}
-					case '>':
-						inputStream.nextChar();
-						if(inputStream.match('=')) {
-							return tokenInfoTable.getDetail(TokenId.GreaterThanEquals).tokenCreator(">=");
-						} else {
-							return tokenInfoTable.getDetail(TokenId.GreaterThan).tokenCreator(">");
-						}
-					case '<':
-						inputStream.nextChar();
-						if(inputStream.match('=')) {
-							return tokenInfoTable.getDetail(TokenId.LessThanEquals).tokenCreator("<=");
-						} else {
-							return tokenInfoTable.getDetail(TokenId.LessThan).tokenCreator("<");
-						}		
-				}		
-				
+		private scanNumber(inputStream:Stream.ICharacterStream) {
+			// Numbers
+			if(inputStream.peek().match(/\d/)) {
+				var entireNumber = inputStream.nextWhile((peek) => peek.match(/\d/));
+				return tokenInfoTable.getDetail(TokenId.Number).tokenCreator(entireNumber);
 			}
 		}
-	}
+		
+		private scanReservedWords(inputStream:Stream.ICharacterStream) {
+			// Match reserved words => word = letter(letter|digit)*
+			// And identifiers
+			if(inputStream.peek().match(/[a-z]/i)) {
+	
+				// Consume the entire word
+				var matchedWord = inputStream.nextWhile((peek) => peek.match(/[a-z]|\d/i));
+				// Attempt to match this against a constant, such as a reserved word
+				var constantToken:TokenDetail = tokenInfoTable.matchConstant(matchedWord);
+				
+				// Test if we have a matching token operator/reserved word
+				// otherwise it is an idenitifer		
+				if(constantToken) {
+					return constantToken.tokenCreator(matchedWord); 
+				} else {
+					return tokenInfoTable.getDetail(TokenId.Identifier).tokenCreator(matchedWord);
+				}
+			}
+		}
+				
+		private scanComment(inputStream:Stream.ICharacterStream) {
+			// Match reserved words => word = letter(letter|digit)*
+			// And identifiers
+			if(inputStream.peek() == "/" && inputStream.peekPeek() == "*") {
+				var commentCharArray = [];
+				commentCharArray.push(inputStream.nextChar());
+				commentCharArray.push(inputStream.nextChar());
+				
+				do {
+					commentCharArray.push(inputStream.nextChar());
+					if(inputStream.peek() == ""){
+						alert("Invalid comment structure");
+						return undefined;
+					}
+				} while(!(inputStream.peek() === "*" && inputStream.peekPeek() === "/"));
+				commentCharArray.push(inputStream.nextChar());
+				commentCharArray.push(inputStream.nextChar());
+				
+				var comment = commentCharArray.join("");
+				
+				return tokenInfoTable.getDetail(TokenId.Comment).tokenCreator(comment);
+			}
+		}
+		
+		private scanOperators(inputStream:Stream.ICharacterStream) {
+			// Match operators			
+			switch(inputStream.peek()) {
+				case ';': return tokenInfoTable.getDetail(TokenId.Semicolon).tokenCreator(inputStream.nextChar());
+				case '=':
+					inputStream.nextChar();
+					if(inputStream.match('=')) {
+						return tokenInfoTable.getDetail(TokenId.EqualsEquals).tokenCreator("==");
+					} else {
+						return tokenInfoTable.getDetail(TokenId.Equals).tokenCreator("=");
+					}
+				case '>':
+					inputStream.nextChar();
+					if(inputStream.match('=')) {
+						return tokenInfoTable.getDetail(TokenId.GreaterThanEquals).tokenCreator(">=");
+					} else {
+						return tokenInfoTable.getDetail(TokenId.GreaterThan).tokenCreator(">");
+					}
+				case '<':
+					inputStream.nextChar();
+					if(inputStream.match('=')) {
+						return tokenInfoTable.getDetail(TokenId.LessThanEquals).tokenCreator("<=");
+					} else {
+						return tokenInfoTable.getDetail(TokenId.LessThan).tokenCreator("<");
+					}		
+			}		
+			
+		}
+}
 }
 
 module Compiler {
-	module Parser {
-		
+	export class Parser {
+		public parse(tokens: Token[]) {
+			
+		}
 	}
 }
 
@@ -323,9 +330,13 @@ module Compiler {
 		+ "var isLessThan = foo < bar;" 
 		+ "var isLessThanOrGreater = foo <= bar;";
 		
+	// Firstly lex and grab all of the tokens (composed of token id and Lexeme)
+	var tokens:Token[] =  new Lexer().lex(testMatch);
+	// Pipe into the next stage, the parser
+	new Parser().parse(tokens);
 	
-	var tokens:Token[] =  new Lexer.Scanner().lex(testMatch);
-	alert("Matching tokens for parsing are ::\n\n\t" + tokens.join("\n\t"));
+
+	//alert("Matching tokens for parsing are ::\n\n\t" + tokens.join("\n\t"));
 }
 
 
